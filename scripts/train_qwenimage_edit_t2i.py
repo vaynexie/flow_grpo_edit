@@ -16,7 +16,7 @@ import itertools
 
 # Setup logger
 logger = logging.getLogger(__name__)
-from diffusers import QwenImageEditPipeline, QwenImageTransformer2DModel
+from diffusers_edit import QwenImageEditPipeline, QwenImageTransformer2DModel
 from diffusers.utils.torch_utils import is_compiled_module
 from diffusers.pipelines.qwenimage.pipeline_qwenimage_edit import calculate_shift, calculate_dimensions
 
@@ -240,7 +240,8 @@ def create_generator(prompts, base_seed):
 
 
 def compute_log_prob(transformer, pipeline, sample, j, config, rank):
-    calculated_width, calculated_height, _ = calculate_dimensions(1024 * 1024, 1)
+    ##calculated_width, calculated_height, _ = calculate_dimensions(1024 * 1024, 1)
+    calculated_width, calculated_height, _ = calculate_dimensions(512 * 512, 1)
     img_shapes = [
         [
             (1, config.resolution // pipeline.vae_scale_factor // 2, config.resolution // pipeline.vae_scale_factor // 2),

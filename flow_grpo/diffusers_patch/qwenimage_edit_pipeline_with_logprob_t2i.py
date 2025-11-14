@@ -86,7 +86,7 @@ def pipeline_with_logprob(
 
     device = self._execution_device
     # 3. Preprocess image
-    if image is not None and not (isinstance(image, torch.Tensor) and image.size(1) == self.latent_channels):
+    if (image is not None and None not in image) and not (isinstance(image, torch.Tensor) and image.size(1) == self.latent_channels):
         image = self.image_processor.resize(image, calculated_height, calculated_width)
         prompt_image = self.image_processor.preprocess(image, calculated_height, calculated_width)
         image = prompt_image.unsqueeze(2)
