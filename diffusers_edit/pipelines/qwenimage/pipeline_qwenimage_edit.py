@@ -340,7 +340,7 @@ class QwenImageEditPipeline(DiffusionPipeline, QwenImageLoraLoaderMixin):
         batch_size = len(prompt) if prompt_embeds is None else prompt_embeds.shape[0]
 
         ##343
-        ##1112
+        ###1114
         if prompt_embeds is None and (image!=None and None not in image):
             prompt_embeds, prompt_embeds_mask = self._get_qwen_prompt_embeds(prompt, image, device)
         if prompt_embeds is None and (image!=None and None not in image):

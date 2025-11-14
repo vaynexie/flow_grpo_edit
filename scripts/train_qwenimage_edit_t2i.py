@@ -16,6 +16,7 @@ import itertools
 
 # Setup logger
 logger = logging.getLogger(__name__)
+###1114
 from diffusers_edit import QwenImageEditPipeline, QwenImageTransformer2DModel
 from diffusers.utils.torch_utils import is_compiled_module
 from diffusers.pipelines.qwenimage.pipeline_qwenimage_edit import calculate_shift, calculate_dimensions
