@@ -255,32 +255,47 @@ def compute_log_prob(transformer, pipeline, sample, j, config, rank):
 
     # Predict the noise residual
     # txt_seq_lens是最长的,sample["prompt_embeds_mask"]和sample["prompt_embeds"]可能有没必要的padding
-    sample["prompt_embeds_mask"] = sample["prompt_embeds_mask"][:, :max(txt_seq_lens+negative_txt_seq_lens)]
-    sample["negative_prompt_embeds_mask"] = sample["negative_prompt_embeds_mask"][:, :max(txt_seq_lens+negative_txt_seq_lens)]
-    sample["prompt_embeds"] = sample["prompt_embeds"][:, :max(txt_seq_lens+negative_txt_seq_lens)]
-    sample["negative_prompt_embeds"] = sample["negative_prompt_embeds"][:, :max(txt_seq_lens+negative_txt_seq_lens)]
+    ##1115
+    sample["prompt_embeds_mask"] = sample["prompt_embeds_mask"][:, :max(txt_seq_lens)]
+    sample["prompt_embeds"] = sample["prompt_embeds"][:, :max(txt_seq_lens)]
+
+    # sample["prompt_embeds_mask"] = sample["prompt_embeds_mask"][:, :max(txt_seq_lens+negative_txt_seq_lens)]
+    # sample["negative_prompt_embeds_mask"] = sample["negative_prompt_embeds_mask"][:, :max(txt_seq_lens+negative_txt_seq_lens)]
+    # sample["prompt_embeds"] = sample["prompt_embeds"][:, :max(txt_seq_lens+negative_txt_seq_lens)]
+    # sample["negative_prompt_embeds"] = sample["negative_prompt_embeds"][:, :max(txt_seq_lens+negative_txt_seq_lens)]
 
     latent_model_input = sample["latents"][:, j]
     if sample["image_latents"] is not None:
         latent_model_input = torch.cat([latent_model_input, sample["image_latents"]],dim=1)
 
+    ##1115
+    # noise_pred = transformer(
+    #     hidden_states=torch.cat([latent_model_input, latent_model_input], dim=0),
+    #     timestep=torch.cat([sample["timesteps"][:, j], sample["timesteps"][:, j]], dim=0) / 1000,
+    #     guidance=None,
+    #     encoder_hidden_states_mask=torch.cat([sample["prompt_embeds_mask"], sample["negative_prompt_embeds_mask"]], dim=0),
+    #     encoder_hidden_states=torch.cat([sample["prompt_embeds"], sample["negative_prompt_embeds"]], dim=0),
+    #     img_shapes=img_shapes*2,
+    #     txt_seq_lens=txt_seq_lens+negative_txt_seq_lens,
+    # )[0]
     noise_pred = transformer(
-        hidden_states=torch.cat([latent_model_input, latent_model_input], dim=0),
-        timestep=torch.cat([sample["timesteps"][:, j], sample["timesteps"][:, j]], dim=0) / 1000,
+        hidden_states=latent_model_input,
+        timestep=sample["timesteps"][:, j]/ 1000,
         guidance=None,
-        encoder_hidden_states_mask=torch.cat([sample["prompt_embeds_mask"], sample["negative_prompt_embeds_mask"]], dim=0),
-        encoder_hidden_states=torch.cat([sample["prompt_embeds"], sample["negative_prompt_embeds"]], dim=0),
-        img_shapes=img_shapes*2,
-        txt_seq_lens=txt_seq_lens+negative_txt_seq_lens,
+        encoder_hidden_states_mask=sample["prompt_embeds_mask"]
+        encoder_hidden_states=sample["prompt_embeds"]
+        img_shapes=img_shapes,
+        txt_seq_lens=txt_seq_lens
     )[0]
-    noise_pred, neg_noise_pred = noise_pred.chunk(2, dim=0)
-    noise_pred = noise_pred[:, : sample["latents"][:, j].size(1)]
-    neg_noise_pred = neg_noise_pred[:, : sample["latents"][:, j].size(1)]
-    comb_pred = neg_noise_pred + config.sample.guidance_scale * (noise_pred - neg_noise_pred)
-
-    cond_norm = torch.norm(noise_pred, dim=-1, keepdim=True)
-    noise_norm = torch.norm(comb_pred, dim=-1, keepdim=True)
-    noise_pred = comb_pred * (cond_norm / noise_norm)
+    ###1115
+    # noise_pred, neg_noise_pred = noise_pred.chunk(2, dim=0)
+    # noise_pred = noise_pred[:, : sample["latents"][:, j].size(1)]
+    # neg_noise_pred = neg_noise_pred[:, : sample["latents"][:, j].size(1)]
+    # comb_pred = neg_noise_pred + config.sample.guidance_scale * (noise_pred - neg_noise_pred)
+    #
+    # cond_norm = torch.norm(noise_pred, dim=-1, keepdim=True)
+    # noise_norm = torch.norm(comb_pred, dim=-1, keepdim=True)
+    # noise_pred = comb_pred * (cond_norm / noise_norm)
     # compute the log prob of next_latents given latents under the current model
     prev_sample, log_prob, prev_sample_mean, std_dev_t = sde_step_with_logprob(
         pipeline.scheduler,
@@ -317,7 +332,8 @@ def eval(pipeline, test_dataloader, config, rank, local_rank, world_size, device
                         prompts,
                         negative_prompt=[" "]*len(prompts),
                         num_inference_steps=config.sample.eval_num_steps,
-                        true_cfg_scale=config.sample.guidance_scale,
+                        ##1115
+                        true_cfg_scale=1#config.sample.guidance_scale,
                         output_type="pt",
                         height=config.resolution,
                         width=config.resolution,
@@ -727,7 +743,8 @@ def main(_):
                         prompts,
                         negative_prompt=[" "]*len(prompts),
                         num_inference_steps=config.sample.num_steps,
-                        true_cfg_scale=config.sample.guidance_scale,
+                        ##1115
+                        true_cfg_scale=1#config.sample.guidance_scale,
                         output_type="pt",
                         height=config.resolution,
                         width=config.resolution,
@@ -754,8 +771,9 @@ def main(_):
                     "prompt_ids": prompt_ids,
                     "prompt_embeds": collected_data["prompt_embeds"],
                     "prompt_embeds_mask": collected_data["prompt_embeds_mask"],
-                    "negative_prompt_embeds": collected_data["negative_prompt_embeds"],
-                    "negative_prompt_embeds_mask": collected_data["negative_prompt_embeds_mask"],
+                    ##1115
+                    #"negative_prompt_embeds": collected_data["negative_prompt_embeds"],
+                    #"negative_prompt_embeds_mask": collected_data["negative_prompt_embeds_mask"],
                     "image_latents": collected_data["image_latents"],
                     "timesteps": timesteps,
                     "latents": latents[
@@ -789,16 +807,17 @@ def main(_):
                 (0, seq_pad_len),              # pad dim=1 (L)
                 value=0,
             )
-            sample["negative_prompt_embeds"] = torch.nn.functional.pad(
-                sample["negative_prompt_embeds"],  # [B, L, D]
-                (0, 0, 0, seq_pad_len),            # pad dim=1 (L)
-                value=0,
-            )
-            sample["negative_prompt_embeds_mask"] = torch.nn.functional.pad(
-                sample["negative_prompt_embeds_mask"],  # [B, L]
-                (0, seq_pad_len),                       # pad dim=1 (L)
-                value=0,
-            )
+            ##1115
+            # sample["negative_prompt_embeds"] = torch.nn.functional.pad(
+            #     sample["negative_prompt_embeds"],  # [B, L, D]
+            #     (0, 0, 0, seq_pad_len),            # pad dim=1 (L)
+            #     value=0,
+            # )
+            # sample["negative_prompt_embeds_mask"] = torch.nn.functional.pad(
+            #     sample["negative_prompt_embeds_mask"],  # [B, L]
+            #     (0, seq_pad_len),                       # pad dim=1 (L)
+            #     value=0,
+            # )
 
             rewards, reward_metadata = sample["rewards"].result()
             # print(reward_metadata)

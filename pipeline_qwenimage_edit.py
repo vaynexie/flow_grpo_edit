@@ -343,7 +343,8 @@ class QwenImageEditPipeline(DiffusionPipeline, QwenImageLoraLoaderMixin):
         ###1114
         if prompt_embeds is None and (image!=None and None not in image):
             prompt_embeds, prompt_embeds_mask = self._get_qwen_prompt_embeds(prompt, image, device)
-        if prompt_embeds is None and (image!=None and None not in image):
+        #if prompt_embeds is None and (image!=None and None not in image):
+        else:
             prompt_embeds, prompt_embeds_mask = self._get_qwen_prompt_embeds_textonly(prompt, device)
 
         _, seq_len, _ = prompt_embeds.shape
@@ -505,9 +506,10 @@ class QwenImageEditPipeline(DiffusionPipeline, QwenImageLoraLoaderMixin):
         width = 2 * (int(width) // (self.vae_scale_factor * 2))
 
         shape = (batch_size, 1, num_channels_latents, height, width)
-        ###1112
-        image_latents = None
-        if image is not None:
+        ###1114
+        if image is None or None in image:
+            image_latents = image
+        if image is not None and None not in image:
             image = image.to(device=device, dtype=dtype)
             if image.shape[1] != self.latent_channels:
                 image_latents = self._encode_vae_image(image=image, generator=generator)
