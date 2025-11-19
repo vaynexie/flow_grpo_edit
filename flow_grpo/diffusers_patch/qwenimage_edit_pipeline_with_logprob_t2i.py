@@ -45,7 +45,7 @@ def pipeline_with_logprob(
     ##1112
     try:
         image_size = image[0].size if isinstance(image, list) else image.size
-        calculated_width, calculated_height, _ = calculate_dimensions(1024 * 1024, image_size[0] / image_size[1])
+        calculated_width, calculated_height, _ = calculate_dimensions(height * width, image_size[0] / image_size[1])
         height = height or calculated_height
         width = width or calculated_width
     except:
@@ -95,30 +95,30 @@ def pipeline_with_logprob(
 
     ## 1112 do_true_cfg is removed here
     ##do_true_cfg = true_cfg_scale > 1 and has_neg_prompt
-    ###1115
-    # prompt_embeds, prompt_embeds_mask = self.encode_prompt(
-    #     ##1112 ???? why do torch.cat([prompt_image, prompt_image], dim=0)
-    #     ## originally in diffusers image=prompt_image
-    #     ###1114
-    #     image=prompt_image+prompt_image ##torch.cat([prompt_image, prompt_image], dim=0),
-    #     prompt=prompt+negative_prompt,
-    #     prompt_embeds=prompt_embeds,
-    #     prompt_embeds_mask=prompt_embeds_mask,
-    #     device=device,
-    #     num_images_per_prompt=num_images_per_prompt,
-    #     max_sequence_length=max_sequence_length,
-    # )
-    # prompt_embeds, negative_prompt_embeds = prompt_embeds.chunk(2, dim=0)
-    # prompt_embeds_mask, negative_prompt_embeds_mask = prompt_embeds_mask.chunk(2, dim=0)
+    ###1115 no-cfg
     prompt_embeds, prompt_embeds_mask = self.encode_prompt(
-        image=prompt_image,
-        prompt=prompt,
+        ##1112 ???? why do torch.cat([prompt_image, prompt_image], dim=0)
+        ## originally in diffusers image=prompt_image
+        ###1114
+        image=prompt_image+prompt_image, ##torch.cat([prompt_image, prompt_image], dim=0),
+        prompt=prompt+negative_prompt,
         prompt_embeds=prompt_embeds,
         prompt_embeds_mask=prompt_embeds_mask,
         device=device,
         num_images_per_prompt=num_images_per_prompt,
         max_sequence_length=max_sequence_length,
     )
+    prompt_embeds, negative_prompt_embeds = prompt_embeds.chunk(2, dim=0)
+    prompt_embeds_mask, negative_prompt_embeds_mask = prompt_embeds_mask.chunk(2, dim=0)
+    # prompt_embeds, prompt_embeds_mask = self.encode_prompt(
+    #     image=prompt_image,
+    #     prompt=prompt,
+    #     prompt_embeds=prompt_embeds,
+    #     prompt_embeds_mask=prompt_embeds_mask,
+    #     device=device,
+    #     num_images_per_prompt=num_images_per_prompt,
+    #     max_sequence_length=max_sequence_length,
+    # )
 
 
 
@@ -234,40 +234,32 @@ def pipeline_with_logprob(
             if image_latents is not None and None not in image_latents:
                 latent_model_input = torch.cat([latents, image_latents], dim=1)
             ####1115
-            # noise_pred = self.transformer(
-            #     hidden_states=torch.cat([latent_model_input, latent_model_input], dim=0),
-            #     timestep=torch.cat([timestep, timestep], dim=0) / 1000,
-            #     guidance=guidance,
-            #     encoder_hidden_states_mask=torch.cat([prompt_embeds_mask, negative_prompt_embeds_mask], dim=0),
-            #     encoder_hidden_states=torch.cat([prompt_embeds, negative_prompt_embeds], dim=0),
-            #     img_shapes=img_shapes*2,
-            #     txt_seq_lens=txt_seq_lens+negative_txt_seq_lens,
-            # )[0]
-            # noise_pred, neg_noise_pred = noise_pred.chunk(2, dim=0)
-            # noise_pred = noise_pred[:, : latents.size(1)]
-            # neg_noise_pred = neg_noise_pred[:, : latents.size(1)]
-            # comb_pred = neg_noise_pred + true_cfg_scale * (noise_pred - neg_noise_pred)
-            #
-            # cond_norm = torch.norm(noise_pred, dim=-1, keepdim=True)
-            # noise_norm = torch.norm(comb_pred, dim=-1, keepdim=True)
-            # noise_pred = comb_pred * (cond_norm / noise_norm)
             noise_pred = self.transformer(
-                hidden_states= latent_model_input,
-                timestep=timestep / 1000,
+                hidden_states=torch.cat([latent_model_input, latent_model_input], dim=0),
+                timestep=torch.cat([timestep, timestep], dim=0) / 1000,
                 guidance=guidance,
-                encoder_hidden_states_mask=prompt_embeds_mask,
-                encoder_hidden_states=prompt_embeds
-                img_shapes=img_shapes,
-                txt_seq_lens=txt_seq_lens
+                encoder_hidden_states_mask=torch.cat([prompt_embeds_mask, negative_prompt_embeds_mask], dim=0),
+                encoder_hidden_states=torch.cat([prompt_embeds, negative_prompt_embeds], dim=0),
+                img_shapes=img_shapes*2,
+                txt_seq_lens=txt_seq_lens+negative_txt_seq_lens,
             )[0]
-            # noise_pred, neg_noise_pred = noise_pred.chunk(2, dim=0)
-            # noise_pred = noise_pred[:, : latents.size(1)]
-            # neg_noise_pred = neg_noise_pred[:, : latents.size(1)]
-            # comb_pred = neg_noise_pred + true_cfg_scale * (noise_pred - neg_noise_pred)
-            #
-            # cond_norm = torch.norm(noise_pred, dim=-1, keepdim=True)
-            # noise_norm = torch.norm(comb_pred, dim=-1, keepdim=True)
-            # noise_pred = comb_pred * (cond_norm / noise_norm)
+            noise_pred, neg_noise_pred = noise_pred.chunk(2, dim=0)
+            noise_pred = noise_pred[:, : latents.size(1)]
+            neg_noise_pred = neg_noise_pred[:, : latents.size(1)]
+            comb_pred = neg_noise_pred + true_cfg_scale * (noise_pred - neg_noise_pred)
+
+            cond_norm = torch.norm(noise_pred, dim=-1, keepdim=True)
+            noise_norm = torch.norm(comb_pred, dim=-1, keepdim=True)
+            noise_pred = comb_pred * (cond_norm / noise_norm)
+            # noise_pred = self.transformer(
+            #     hidden_states= latent_model_input,
+            #     timestep=timestep / 1000,
+            #     guidance=guidance,
+            #     encoder_hidden_states_mask=prompt_embeds_mask,
+            #     encoder_hidden_states=prompt_embeds,
+            #     img_shapes=img_shapes,
+            #     txt_seq_lens=txt_seq_lens
+            # )[0]
 
 
             latents_dtype = latents.dtype
@@ -310,9 +302,11 @@ def pipeline_with_logprob(
         "all_log_probs": all_log_probs,
         "all_timesteps": all_timesteps,
         "prompt_embeds": prompt_embeds,
-        #"negative_prompt_embeds": negative_prompt_embeds,
+        ###1115
+        "negative_prompt_embeds": negative_prompt_embeds,
         "prompt_embeds_mask": prompt_embeds_mask,
-        #"negative_prompt_embeds_mask": negative_prompt_embeds_mask,
+        ###1115
+        "negative_prompt_embeds_mask": negative_prompt_embeds_mask,
         "image_latents": image_latents,
     }
     return ret
